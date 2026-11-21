@@ -33,6 +33,14 @@ npm run build:pages  # build para GitHub Pages (rutas en /cpr-owlbear-coberturas
 
 Owlbear no acepta rutas relativas en el manifest ("Invalid URL"). Por eso el manifest lo genera `vite.config.ts` con la carpeta donde se publica (`PAGES_DIR`). Si cambia el nombre del repo o el lugar donde se publica, se cambia ahí.
 
+## Publicar [Claude Code · 2026-11-21]
+
+Repo: https://github.com/Notefuk/cpr-owlbear-coberturas. GitHub Pages sirve la rama `gh-pages` (raíz), que tiene solo el build. Para publicar una versión nueva (con OK de Giuliano):
+
+1. `npm test` y `npm run build:pages`.
+2. Copiar `dist/` (más un `.nojekyll` vacío) a la rama `gh-pages`, commitear y pushear.
+3. Comprobar que `https://notefuk.github.io/cpr-owlbear-coberturas/manifest.json` responde. Owlbear toma la versión nueva al recargar la sala.
+
 ## Archivos
 
 | Archivo | Qué es |
