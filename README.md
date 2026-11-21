@@ -6,11 +6,17 @@ Extensión de [Owlbear Rodeo](https://www.owlbear.rodeo) con las coberturas del 
 
 ## Qué hace
 
-- El GM selecciona un objeto del mapa → ⋮ → "Cobertura" → elige material y grosor. Aparece una etiqueta con los HP.
-- Cualquier jugador le carga daño. A 0 HP queda DESTRUIDA y se avisa el daño que se pierde (Core p.182). El GM puede restaurarla o quitarla.
-- El ícono de arriba a la izquierda abre la lista de coberturas de la escena y la tabla.
+- **Paredes por tramos** (v1.1.0, plan 1) [Claude Code · 2026-11-21]: herramienta "Coberturas" (ícono de ladrillos en la barra de la derecha).
+  - Modo "Trazar pared" (solo GM): el material y el grosor se eligen en el panel; se arrastra sobre la grilla y la pared queda cortada en tramos de una casilla (2 m x 2 m, Core p.182), cada uno con sus HP. Los tramos van bloqueados: los jugadores no los mueven ni borran.
+  - Modo "Dañar o marcar" (todos): clic en un tramo o en una cobertura abre el formulario de daño. Un tramo destruido queda punteado y transparente: un hueco en la pared. Los tramos dañados muestran sus HP. El GM restaura el tramo o la pared entera, o la borra.
+  - Una línea o trazo abierto ya dibujado se convierte en pared: modo "Dañar o marcar" (o clic derecho) sobre la línea → "Convertir en pared". Conserva su color y grosor; las líneas muy finas cuestan de clickear.
+  - Diagonales: se cortan por su largo real contado en casillas (interpretación; el libro no habla de diagonales).
+- **Objetos sueltos** (un auto, un contenedor): el GM selecciona el objeto → ⋮ → "Cobertura" (o clic con el modo "Dañar o marcar") → material y grosor. Es una sola cobertura con una etiqueta de HP.
+- Cualquier jugador carga daño. A 0 HP queda destruida y se avisa el daño que se pierde (Core p.182).
+- El ícono de arriba a la izquierda abre el panel: material de la herramienta de pared (GM), paredes con sus tramos rotos, coberturas sueltas y la tabla.
 - El daño que carga un jugador lo aplica el navegador del GM, así que el GM tiene que estar en la sala.
-- Los datos quedan en el mapa de Owlbear (clave `io.github.notefuk.cpr/cover` en cada objeto).
+- Los datos quedan en el mapa de Owlbear: `io.github.notefuk.cpr/cover` (HP) en cada objeto o tramo y `io.github.notefuk.cpr/wall` (pared y número de tramo) en los tramos.
+- Afuera: las paredes no tapan la visión (eso es Dynamic Fog of War) y el daño de área a varios tramos se carga tramo por tramo.
 
 ## Instalar en Owlbear (una vez, el GM)
 
@@ -46,9 +52,12 @@ Repo: https://github.com/Notefuk/cpr-owlbear-coberturas. GitHub Pages sirve la r
 | Archivo | Qué es |
 |---|---|
 | `src/coverItem.ts` | Lógica: marcar, dañar, restaurar, quitar, la etiqueta |
-| `src/background.ts` | Página de fondo: menú "Cobertura" y aplicar el daño de los jugadores (solo en el navegador del GM) |
-| `src/CoverMenu.tsx` | Formulario dentro del menú "Cobertura" |
-| `src/CoverPanel.tsx` | Panel del ícono: lista y tabla |
+| `src/wall.ts` | Paredes: crear por tramos, convertir líneas, restaurar y borrar la pared |
+| `src/geometry.ts` (+ test) | Cuentas puras: cortar una línea en tramos de una casilla |
+| `src/background.ts` | Página de fondo: menú "Cobertura", herramienta "Coberturas" y aplicar el daño de los jugadores (solo en el navegador del GM) |
+| `src/CoverMenu.tsx` | Formulario del menú "Cobertura" y del modo "Dañar o marcar" |
+| `src/CoverPanel.tsx` | Panel del ícono: material de la pared, lista y tabla |
+| `docs/plans/` | Planes aprobados (no se editan) |
 | `src/useObr.ts`, `src/owlbear.css` | Funciones comunes y estilos |
 | `src/rules/` | Copia de la tabla y las reglas de cobertura del Omni-Deck, con sus tests |
 | `background.html`, `cover.html`, `index.html` | Las tres páginas que abre Owlbear |

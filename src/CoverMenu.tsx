@@ -3,15 +3,18 @@ import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { COVER_MATERIALS, COVER_PAGE_REF, type CoverMaterialId, type CoverThickness } from './rules/coverTable';
 import { applyCoverDamage, coverMaxHp } from './rules/cover';
-import { coverTitle, getCover, markCover, removeCover, requestDamage, restoreItemCover } from './coverItem';
+import { coverTitle, getCover, getWall, isStroke, markCover, removeCover, requestDamage, restoreItemCover } from './coverItem';
+import { convertToWall, deleteWall, restoreWall } from './wall';
 import { useObrReady, useRole, useSceneItems, useSelection } from './useObr';
 import './owlbear.css';
 
-function MarkForm({ onMark }: { onMark: (m: CoverMaterialId, t: CoverThickness) => void }) {
+const ITEM_FROM_URL = new URLSearchParams(window.location.search).get('item');
+
+function MarkForm({ onMark, asWall }: { onMark: (m: CoverMaterialId, t: CoverThickness) => void; asWall?: boolean }) {
   const [material, setMaterial] = useState<CoverMaterialId>('concrete');
   return (
     <>
-      <h1>Marcar como cobertura</h1>
+      <h1>{asWall ? 'Convertir en pared de cobertura' : 'Marcar como cobertura'}</h1>
       <div className="row">
         <select value={material} onChange={(e) => setMaterial(e.target.value as CoverMaterialId)} aria-label="Material">
           {COVER_MATERIALS.map((m) => (
@@ -29,7 +32,10 @@ function MarkForm({ onMark }: { onMark: (m: CoverMaterialId, t: CoverThickness) 
           );
         })}
       </div>
-      <p className="muted">Una casilla de 2 m x 2 m. HP según {COVER_PAGE_REF}.</p>
+      <p className="muted">
+        {asWall ? 'Se corta en tramos de una casilla (2 m), cada uno con sus HP. ' : 'Una casilla de 2 m x 2 m. '}
+        HP según {COVER_PAGE_REF}.
+      </p>
     </>
   );
 }
@@ -43,9 +49,11 @@ function CoverMenu() {
   const [busy, setBusy] = useState(false);
 
   if (!ready || !role) return <p className="muted">Cargando…</p>;
-  const item = items.find((i) => i.id === selection[0]);
+  // Desde la herramienta "Coberturas" el ítem llega por la URL; desde el clic derecho, es el seleccionado.
+  const item = items.find((i) => i.id === (ITEM_FROM_URL ?? selection[0]));
   if (!item) return <p className="muted">Seleccioná un objeto del mapa.</p>;
   const cover = getCover(item);
+  const wall = getWall(item);
   const gm = role === 'GM';
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -54,15 +62,18 @@ function CoverMenu() {
   };
 
   if (!cover) {
-    return gm ? <MarkForm onMark={(m, t) => run(() => markCover(item, m, t))} /> : <p className="muted">Este objeto no es cobertura.</p>;
+    if (!gm) return <p className="muted">Este objeto no es cobertura.</p>;
+    return isStroke(item)
+      ? <MarkForm asWall onMark={(m, t) => run(() => convertToWall(item, m, t))} />
+      : <MarkForm onMark={(m, t) => run(() => markCover(item, m, t))} />;
   }
 
   const preview = damage > 0 ? applyCoverDamage(cover, damage) : null;
   return (
     <>
-      <h1>{coverTitle(cover)}</h1>
+      <h1>{coverTitle(cover)}{wall && <span className="muted"> · tramo {wall.index + 1}/{wall.count}</span>}</h1>
       {cover.destroyed ? (
-        <p className="bad">DESTRUIDA: ya no cubre.</p>
+        <p className="bad">{wall ? 'DESTRUIDO: este tramo ya no cubre.' : 'DESTRUIDA: ya no cubre.'}</p>
       ) : (
         <>
           <p>{cover.hp} / {cover.maxHp} HP</p>
@@ -82,10 +93,17 @@ function CoverMenu() {
           {!gm && <p className="muted">El daño lo aplica el GM: tiene que estar en la sala.</p>}
         </>
       )}
-      {gm && (
+      {gm && !wall && (
         <div className="row">
           <button type="button" disabled={busy} onClick={() => run(() => restoreItemCover(item))}>Restaurar</button>
           <button type="button" disabled={busy} onClick={() => run(() => removeCover(item))}>Quitar cobertura</button>
+        </div>
+      )}
+      {gm && wall && (
+        <div className="row">
+          <button type="button" disabled={busy} onClick={() => run(() => restoreItemCover(item))}>Restaurar tramo</button>
+          <button type="button" disabled={busy} onClick={() => run(() => restoreWall(wall.wallId))}>Restaurar pared</button>
+          <button type="button" disabled={busy} onClick={() => run(() => deleteWall(wall.wallId))}>Borrar pared</button>
         </div>
       )}
     </>

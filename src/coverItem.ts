@@ -1,6 +1,6 @@
 // Extensión de Owlbear Rodeo para coberturas (plan 29, v5.47.0). Lógica compartida por las páginas. [Claude Code · 2026-11-20]
 // Regla: Core p.182. Datos: data/coverTable.ts. Motor: engine/cover.ts.
-import OBR, { buildLabel, isShape, type Item } from '@owlbear-rodeo/sdk';
+import OBR, { buildLabel, isCurve, isLine, isShape, type Item } from '@owlbear-rodeo/sdk';
 import { getCoverMaterial, type CoverMaterialId, type CoverThickness } from './rules/coverTable';
 import { applyCoverDamage, createCover, restoreCover, type CoverState } from './rules/cover';
 
@@ -11,12 +11,32 @@ export const COVER_KEY = `${EXT_ID}/cover`;
 export const LABEL_KEY = `${EXT_ID}/cover-label`;
 /** Canal por el que un jugador pide aplicar daño; lo aplica el cliente del GM. */
 export const DAMAGE_CHANNEL = `${EXT_ID}/cover-damage`;
+/** Tramo de una pared de cobertura (plan 1): a qué pared pertenece y qué número de tramo es. [Claude Code · 2026-11-21] */
+export const WALL_KEY = `${EXT_ID}/wall`;
 
 export interface StoredCover extends CoverState {
   /** Id del último pedido de daño aplicado, para no aplicarlo dos veces. */
   lastDamageId?: string;
-  /** fillOpacity original de una forma, para restaurarla. */
+  /** Opacidad original para restaurarla: el relleno en formas y polígonos, el trazo en líneas y trazos. */
   originalOpacity?: number;
+  /** Trazo punteado original de una línea, para restaurarlo. */
+  originalDash?: number[];
+}
+
+export interface WallInfo {
+  wallId: string;
+  index: number;
+  count: number;
+}
+
+export function getWall(item: Item | undefined): WallInfo | null {
+  const raw = item?.metadata?.[WALL_KEY] as WallInfo | undefined;
+  return raw && typeof raw.wallId === 'string' ? raw : null;
+}
+
+/** Líneas y trazos abiertos: se pueden convertir en pared. */
+export function isStroke(item: Item): boolean {
+  return isLine(item) || (isCurve(item) && !item.style.closed);
 }
 
 export interface DamageMessage {
@@ -48,15 +68,20 @@ async function findLabels(itemId: string): Promise<Item[]> {
   return OBR.scene.items.getItems((i) => i.metadata?.[LABEL_KEY] === itemId);
 }
 
-/** Crea o actualiza la etiqueta adjunta al ítem cubierto. */
-async function syncLabel(itemId: string, c: CoverState): Promise<void> {
+/** Crea o actualiza la etiqueta adjunta al ítem cubierto. Los tramos de pared solo la muestran si están dañados. */
+async function syncLabel(itemId: string, c: CoverState, isSection = false): Promise<void> {
   const labels = await findLabels(itemId);
+  if (isSection && (c.destroyed || c.hp === c.maxHp)) {
+    if (labels.length) await OBR.scene.items.deleteItems(labels.map((l) => l.id));
+    return;
+  }
+  const text = isSection ? `${c.hp}/${c.maxHp}` : labelText(c);
   if (labels.length > 0) {
     await OBR.scene.items.updateItems(labels, (drafts) => {
       for (const d of drafts) {
         if (d.type !== 'LABEL') continue;
         const label = d as unknown as { text: { plainText: string }; style: { backgroundColor: string } };
-        label.text.plainText = labelText(c);
+        label.text.plainText = text;
         label.style.backgroundColor = labelColor(c);
       }
     });
@@ -64,14 +89,14 @@ async function syncLabel(itemId: string, c: CoverState): Promise<void> {
   }
   const bounds = await OBR.scene.items.getItemBounds([itemId]);
   const label = buildLabel()
-    .plainText(labelText(c))
+    .plainText(text)
     .backgroundColor(labelColor(c))
     .backgroundOpacity(0.9)
-    .fontSize(14)
+    .fontSize(isSection ? 12 : 14)
     .pointerDirection('DOWN')
     .pointerHeight(6)
     .pointerWidth(10)
-    .position({ x: bounds.center.x, y: bounds.min.y })
+    .position({ x: bounds.center.x, y: isSection ? bounds.center.y : bounds.min.y })
     .attachedTo(itemId)
     .layer('ATTACHMENT')
     .locked(true)
@@ -82,18 +107,26 @@ async function syncLabel(itemId: string, c: CoverState): Promise<void> {
   await OBR.scene.items.addItems([label]);
 }
 
-/** Guarda el estado en el ítem; a 0 HP baja la opacidad de las formas. */
+/** Trazo punteado de un tramo destruido: se ve como un hueco en la pared. */
+const DESTROYED_DASH = [12, 12];
+
+/** Guarda el estado en el ítem; a 0 HP baja la opacidad (relleno en formas, trazo punteado en líneas). */
 async function writeCover(item: Item, next: StoredCover): Promise<void> {
   await OBR.scene.items.updateItems([item.id], (drafts) => {
     for (const d of drafts) {
-      if (isShape(d)) {
+      if (isShape(d) || (isCurve(d) && d.style.closed)) {
         if (next.originalOpacity === undefined) next.originalOpacity = d.style.fillOpacity;
         d.style.fillOpacity = next.destroyed ? Math.min(0.2, next.originalOpacity) : next.originalOpacity;
+      } else if (isLine(d) || isCurve(d)) {
+        if (next.originalOpacity === undefined) next.originalOpacity = d.style.strokeOpacity;
+        if (next.originalDash === undefined) next.originalDash = d.style.strokeDash;
+        d.style.strokeOpacity = next.destroyed ? Math.min(0.25, next.originalOpacity) : next.originalOpacity;
+        d.style.strokeDash = next.destroyed ? DESTROYED_DASH : next.originalDash;
       }
       d.metadata[COVER_KEY] = next;
     }
   });
-  await syncLabel(item.id, next);
+  await syncLabel(item.id, next, getWall(item) !== null);
 }
 
 /** GM: convierte el ítem en cobertura. Devuelve false si el material/grosor no es cobertura. */
@@ -112,9 +145,11 @@ export async function applyDamageMessage(msg: DamageMessage): Promise<void> {
   const result = applyCoverDamage(cover, msg.damage);
   await writeCover(item, { ...cover, ...result.cover, lastDamageId: msg.id });
   const lost = result.lost > 0 ? ` Sobran ${result.lost}: se pierden (Core p.182).` : '';
+  const wall = getWall(item);
+  const what = wall ? `${coverTitle(cover)}, tramo ${wall.index + 1}/${wall.count}` : coverTitle(cover);
   const text = result.cover.destroyed
-    ? `${coverTitle(cover)}: DESTRUIDA por ${msg.by}.${lost}`
-    : `${coverTitle(cover)}: ${msg.by} le hizo ${result.absorbed}, quedan ${result.cover.hp}/${cover.maxHp} HP.`;
+    ? `${what}: DESTRUIDO por ${msg.by}.${lost}`
+    : `${what}: ${msg.by} le hizo ${result.absorbed}, quedan ${result.cover.hp}/${cover.maxHp} HP.`;
   await OBR.broadcast.sendMessage(`${EXT_ID}/cover-log`, text, { destination: 'ALL' });
 }
 
@@ -137,7 +172,7 @@ export async function removeCover(item: Item): Promise<void> {
   const cover = getCover(item);
   await OBR.scene.items.updateItems([item.id], (drafts) => {
     for (const d of drafts) {
-      if (isShape(d) && cover?.originalOpacity !== undefined) d.style.fillOpacity = cover.originalOpacity;
+      if ((isShape(d) || (isCurve(d) && d.style.closed)) && cover?.originalOpacity !== undefined) d.style.fillOpacity = cover.originalOpacity;
       delete d.metadata[COVER_KEY];
     }
   });
