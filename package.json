@@ -1,0 +1,27 @@
+{
+  "name": "cpr-owlbear-coberturas",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Extensión de Owlbear Rodeo para coberturas de Cyberpunk RED (Core p.182). Proyecto aparte del CPR Omni-Deck.",
+  "scripts": {
+    "dev": "vite --port 5179 --strictPort --cors",
+    "build": "tsc --noEmit && vite build",
+    "build:pages": "tsc --noEmit && vite build --mode pages",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@owlbear-rodeo/sdk": "^3.1.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.5"
+  }
+}
