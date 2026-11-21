@@ -12,9 +12,9 @@ const PAGES_DIR = '/cpr-owlbear-coberturas/'
 function owlbearManifest(dir: string): Plugin {
   const manifest = JSON.stringify({
     name: 'Coberturas Cyberpunk RED',
-    version: '1.0.0',
+    version: '1.1.0',
     manifest_version: 1,
-    description: 'Coberturas del Core p.182: el GM marca objetos del mapa como cobertura y todos ven y dañan sus HP.',
+    description: 'Coberturas del Core p.182: paredes por tramos de 2 m y objetos marcados como cobertura; todos ven y dañan sus HP.',
     author: 'CPR Omni-Deck',
     icon: `${dir}icon.svg`,
     background_url: `${dir}background.html`,
