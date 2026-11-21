@@ -1,0 +1,16 @@
+{
+  "name": "Coberturas Cyberpunk RED",
+  "version": "1.0.0",
+  "manifest_version": 1,
+  "description": "Coberturas del Core p.182: el GM marca objetos del mapa como cobertura y todos ven y dañan sus HP.",
+  "author": "CPR Omni-Deck",
+  "icon": "/cpr-owlbear-coberturas/icon.svg",
+  "background_url": "/cpr-owlbear-coberturas/background.html",
+  "action": {
+    "title": "Coberturas CPR",
+    "icon": "/cpr-owlbear-coberturas/icon.svg",
+    "popover": "/cpr-owlbear-coberturas/index.html",
+    "width": 360,
+    "height": 480
+  }
+}
